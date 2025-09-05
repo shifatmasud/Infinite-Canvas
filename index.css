@@ -1,0 +1,138 @@
+:root {
+  --bg-color: #f8f8f8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--bg-color);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  color: #333;
+}
+
+.parallax-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  perspective: 1000px; /* Enable 3D space */
+}
+
+/* --- ART DIRECTION: Cinematic Vignette --- */
+.parallax-container::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    box-shadow: inset 0 0 100px 20px rgba(0,0,0,0.15);
+    pointer-events: none; /* Make sure it doesn't interfere with mouse events */
+}
+
+
+.parallax-container:active {
+  cursor: grabbing;
+}
+
+.parallax-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  will-change: transform, filter;
+  transform-style: preserve-3d; /* Allow 3D positioning of children */
+  transition: filter 0.5s ease;
+}
+
+/* --- ART DIRECTION: Depth of Field --- */
+.layer-far {
+  filter: blur(2px);
+}
+.layer-mid {
+  filter: blur(1px);
+}
+.layer-near {
+  filter: blur(0px);
+}
+
+
+.parallax-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  will-change: transform;
+}
+
+.card {
+    position: absolute;
+    background: #ffffff;
+    border-radius: 8px;
+    border: none;
+    box-shadow: none;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    will-change: transform, box-shadow, filter, opacity;
+    transform: var(--transform);
+    transition: box-shadow 0.3s ease, transform 0.3s ease, filter 0.4s ease, opacity 0.4s ease;
+}
+
+/* --- ART DIRECTION: Focus Pull --- */
+.parallax-container.is-focused .card:not(:hover) {
+    filter: blur(2px);
+    opacity: 0.8;
+}
+
+
+.card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.04), 0 10px 20px rgba(0,0,0,0.08);
+    transform: var(--transform) translateZ(30px) scale(1.03);
+}
+
+.card:hover .card-image {
+    filter: grayscale(0);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #555;
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(4px);
+    border-bottom: 1px solid #f0f0f0;
+    white-space: nowrap;
+}
+
+.card-title {
+    font-weight: 600;
+}
+
+.card-meta {
+    color: #999;
+}
+
+.card-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+    filter: grayscale(1);
+    transition: filter 0.3s ease;
+}

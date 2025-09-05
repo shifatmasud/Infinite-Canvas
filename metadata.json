@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Infinite 3D Parallax System",
+  "description": "A modular, physics-based parallax system using React and GSAP, featuring infinite tiling, inertia, and lag.",
+  "requestFramePermissions": []
+}
