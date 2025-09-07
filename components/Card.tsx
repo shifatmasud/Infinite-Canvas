@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { CSSProperties, forwardRef } from 'react';
+import { CSSProperties, forwardRef, useState } from 'react';
 import type { CardData } from '../data/cards';
 
 interface CardProps {
@@ -10,6 +10,16 @@ interface CardProps {
 }
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(({ card }, ref) => {
+  const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+
+  const handleImageLoad = () => {
+    setImageStatus('loaded');
+  };
+
+  const handleImageError = () => {
+    setImageStatus('error');
+  };
+
   return (
     <div
       key={card.id}
@@ -26,13 +36,23 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(({ card }, ref) => {
         <span className="card-title">{card.title}</span>
         <span className="card-meta">{card.meta}</span>
       </div>
-      <img 
-        src={card.image} 
-        alt={card.title} 
-        className="card-image" 
-        loading="lazy" 
-        draggable={false}
-      />
+      <div className="card-image-wrapper">
+        {imageStatus === 'loading' && <div className="card-image-placeholder" />}
+        {imageStatus === 'error' && (
+          <div className="card-image-error">
+            <span>Image not available</span>
+          </div>
+        )}
+        <img
+          src={card.image}
+          alt={card.title}
+          className={`card-image ${imageStatus === 'loaded' ? 'loaded' : ''}`}
+          loading="lazy"
+          draggable={false}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+        />
+      </div>
     </div>
   );
 });

@@ -22,9 +22,9 @@ export interface CardData {
 // --- CURATED MOCK DATA FOR CARDS (COZY LAYOUT) ---
 export const CARD_DATA: CardData[] = [
   // Near Layer (layer: 2) - Most prominent
-  { id: 'c1', layer: 2, image: 'https://images.unsplash.com/photo-1599481238640-4c1288750d7a?w=500&q=80', title: 'Abstract Forms', meta: 'Daniel Bornmann', position: { x: 150, y: -50, z: 120, scale: 1.3, width: 400 } },
-  { id: 'c3', layer: 2, image: 'https://images.unsplash.com/photo-1558522195-e1b9a13593a2?w=500&q=80', title: 'Porcelain', meta: 'Adebayo Oyelawal', position: { x: -350, y: 250, z: 200, scale: 1, width: 280 } },
-  { id: 'c6', layer: 2, image: 'https://images.unsplash.com/photo-1617783422459-47068f641a64?w=500&q=80', title: 'Monochrome', meta: 'Antonio Diacosia', position: { x: 550, y: 300, z: 250, scale: 1, width: 250 } },
+  { id: 'c1', layer: 2, image: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=500&q=80', title: 'Abstract Forms', meta: 'Daniel Bornmann', position: { x: 150, y: -50, z: 120, scale: 1.3, width: 400 } },
+  { id: 'c3', layer: 2, image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=500&q=80', title: 'Porcelain', meta: 'Adebayo Oyelawal', position: { x: -350, y: 250, z: 200, scale: 1, width: 280 } },
+  { id: 'c6', layer: 2, image: 'https://images.unsplash.com/photo-1502691876148-a84978e59af8?w=500&q=80', title: 'Monochrome', meta: 'Antonio Diacosia', position: { x: 550, y: 300, z: 250, scale: 1, width: 250 } },
   { id: 'c9', layer: 2, image: 'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=500&q=80', title: 'The Classics', meta: 'Natasha Jen', position: { x: -500, y: -400, z: 80, scale: 0.8, width: 300 } },
   { id: 'c12', layer: 2, image: 'https://images.unsplash.com/photo-1506782081999-1139f8b45f09?w=500&q=80', title: 'Textured', meta: 'Rosella Mei', position: { x: 800, y: 550, z: 150, scale: 0.9, width: 280 } },
   { id: 'c15', layer: 2, image: 'https://images.unsplash.com/photo-1487744479979-628f11409f52?w=500&q=80', title: 'Concrete Jungle', meta: 'Maxime Lebrun', position: { x: -800, y: 100, z: 180, scale: 1, width: 320 } },
