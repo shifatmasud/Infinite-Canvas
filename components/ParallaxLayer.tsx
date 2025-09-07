@@ -2,26 +2,19 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { forwardRef } from 'react';
+import { forwardRef, RefObject } from 'react';
 import { Card } from './Card';
 import type { CardData } from '../data/cards';
-import { config } from '../config/parallax';
+import { config, TILE_OFFSETS } from '../config/parallax';
 
 interface ParallaxLayerProps {
   className: string;
   cards: CardData[];
-  setIsFocused: (isFocused: boolean) => void;
+  cardRefs: RefObject<{ [key: string]: HTMLDivElement | null }>;
 }
 
-// Defines a 3x3 grid for tiling, including the center tile
-const TILE_OFFSETS = [
-  { x: 0, y: 0 }, { x: 1, y: 0 }, { x: -1, y: 0 },
-  { x: 0, y: 1 }, { x: 0, y: -1 }, { x: 1, y: 1 },
-  { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
-];
-
 export const ParallaxLayer = forwardRef<HTMLDivElement, ParallaxLayerProps>(
-  ({ className, cards, setIsFocused }, ref) => {
+  ({ className, cards, cardRefs }, ref) => {
     return (
       <div className={`parallax-layer ${className}`} ref={ref}>
         {TILE_OFFSETS.map((offset, i) => (
@@ -33,8 +26,15 @@ export const ParallaxLayer = forwardRef<HTMLDivElement, ParallaxLayerProps>(
             }}
           >
             {cards.map(card => (
-              // Use a unique key for each card instance across all tiles
-              <Card key={`${card.id}-${i}`} card={card} setIsFocused={setIsFocused} />
+              <Card 
+                key={`${card.id}-${i}`} 
+                card={card}
+                ref={(el: HTMLDivElement | null) => {
+                  if (cardRefs.current) {
+                    cardRefs.current[`${card.id}-${i}`] = el;
+                  }
+                }}
+              />
             ))}
           </div>
         ))}

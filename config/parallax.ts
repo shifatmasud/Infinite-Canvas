@@ -21,6 +21,13 @@ export interface ParallaxConfig {
   worldHeight: number;
 }
 
+// Defines a 3x3 grid for tiling, including the center tile
+export const TILE_OFFSETS = [
+  { x: 0, y: 0 }, { x: 1, y: 0 }, { x: -1, y: 0 },
+  { x: 0, y: 1 }, { x: 0, y: -1 }, { x: 1, y: 1 },
+  { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
+];
+
 // Configuration for the parallax layers and motion
 export const config: ParallaxConfig = {
   layers: [
@@ -29,7 +36,7 @@ export const config: ParallaxConfig = {
     { depth: 0.4, lag: 0.1, className: 'layer-mid' },
     { depth: 1.0, lag: 0.15, className: 'layer-near' },
   ],
-  scrollSpeed: 1.5,
-  worldWidth: 4000,
-  worldHeight: 3500,
+  scrollSpeed: 1.8,
+  worldWidth: 2500,
+  worldHeight: 2200,
 };

@@ -24,23 +24,22 @@ html, body, #root {
   overflow: hidden;
   cursor: grab;
   perspective: 1000px; /* Enable 3D space */
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE10+/Edge */
+  user-select: none; /* Standard */
 }
-
-/* --- ART DIRECTION: Cinematic Vignette --- */
-.parallax-container::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    box-shadow: inset 0 0 100px 20px rgba(0,0,0,0.15);
-    pointer-events: none; /* Make sure it doesn't interfere with mouse events */
-}
-
 
 .parallax-container:active {
   cursor: grabbing;
+}
+
+.parallax-scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .parallax-layer {
@@ -51,20 +50,7 @@ html, body, #root {
   height: 100%;
   will-change: transform, filter;
   transform-style: preserve-3d; /* Allow 3D positioning of children */
-  transition: filter 0.5s ease;
 }
-
-/* --- ART DIRECTION: Depth of Field --- */
-.layer-far {
-  filter: blur(2px);
-}
-.layer-mid {
-  filter: blur(1px);
-}
-.layer-near {
-  filter: blur(0px);
-}
-
 
 .parallax-tile {
   position: absolute;
@@ -79,30 +65,17 @@ html, body, #root {
     position: absolute;
     background: #ffffff;
     border-radius: 8px;
-    border: none;
-    box-shadow: none;
+    border: 1px solid #f0f0f0; /* Add subtle border for definition */
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    will-change: transform, box-shadow, filter, opacity;
+    will-change: transform, opacity;
     transform: var(--transform);
-    transition: box-shadow 0.3s ease, transform 0.3s ease, filter 0.4s ease, opacity 0.4s ease;
+    transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.4s ease;
 }
-
-/* --- ART DIRECTION: Focus Pull --- */
-.parallax-container.is-focused .card:not(:hover) {
-    filter: blur(2px);
-    opacity: 0.8;
-}
-
 
 .card:hover {
-    box-shadow: 0 4px 8px rgba(0,0,0,0.04), 0 10px 20px rgba(0,0,0,0.08);
-    transform: var(--transform) translateZ(30px) scale(1.03);
-}
-
-.card:hover .card-image {
-    filter: grayscale(0);
+    transform: var(--transform) scale(1.03) translateZ(25px);
 }
 
 .card-header {
@@ -114,8 +87,7 @@ html, body, #root {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #555;
-    background-color: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(4px);
+    background-color: rgba(255, 255, 255, 0.95);
     border-bottom: 1px solid #f0f0f0;
     white-space: nowrap;
 }
@@ -133,6 +105,5 @@ html, body, #root {
     height: auto;
     display: block;
     object-fit: cover;
-    filter: grayscale(1);
-    transition: filter 0.3s ease;
+    /* Removed filter for performance */
 }
