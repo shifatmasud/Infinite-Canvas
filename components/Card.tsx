@@ -9,12 +9,13 @@ import type { CardData } from '../data/cards';
 interface CardProps {
   card: CardData;
   isDragging: boolean;
+  isFocused: boolean;
   eventHandlers: {
     onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
   }
 }
 
-export const Card = forwardRef<HTMLDivElement, CardProps>(({ card, isDragging, eventHandlers }, ref) => {
+export const Card = forwardRef<HTMLDivElement, CardProps>(({ card, isDragging, isFocused, eventHandlers }, ref) => {
   const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const imageRef = useRef<HTMLImageElement>(null);
   const placeholderRef = useRef<HTMLDivElement>(null);
@@ -40,8 +41,8 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(({ card, isDragging, e
     setImageStatus('error');
   };
 
-  const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isDragging) return;
+  const handlePointerEnter = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDragging || isFocused) return;
     if (hoverAnimationRef.current) hoverAnimationRef.current.kill();
     hoverAnimationRef.current = gsap.to(e.currentTarget, {
       scale: card.position.scale * 1.05,
@@ -50,21 +51,24 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(({ card, isDragging, e
     });
   };
 
-  const handleMouseLeave = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (hoverAnimationRef.current) hoverAnimationRef.current.kill();
-    hoverAnimationRef.current = gsap.to(e.currentTarget, {
-      scale: card.position.scale,
-      duration: 0.5,
-      ease: 'power3.out',
-    });
+  const handlePointerLeave = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Reset hover scale if not dragging and not focused
+    if (!isDragging && !isFocused) {
+        if (hoverAnimationRef.current) hoverAnimationRef.current.kill();
+        hoverAnimationRef.current = gsap.to(e.currentTarget, {
+            scale: card.position.scale,
+            duration: 0.5,
+            ease: 'power3.out',
+        });
+    }
   };
 
   return (
     <div
       className="card"
       ref={ref}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
       onPointerDown={eventHandlers.onPointerDown}
       style={{ touchAction: 'none' }} // Required for pointer events
     >
