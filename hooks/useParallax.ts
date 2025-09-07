@@ -90,15 +90,15 @@ export function useParallax(
       lastDraggedCardId.current = cardId;
       if (tileIndex !== null) {
         if (isClick) {
-          // This is a click, toggle focus
-          const { id: currentFocusedId, tileIndex: currentFocusedTileIndex } = focusedCardRef.current;
+          // This is a click, manage focus state
+          const { id: currentFocusedId } = focusedCardRef.current;
           
-          // Unfocus if the *exact same card instance* is clicked again
-          if (currentFocusedId === cardId && currentFocusedTileIndex === tileIndex) {
-              setFocusedCard(null);
+          // If no card is currently focused, focus on the clicked card.
+          if (currentFocusedId === null) {
+            setFocusedCard(cardId, tileIndex);
           } else {
-              // Focus on the newly clicked card instance
-              setFocusedCard(cardId, tileIndex);
+            // A card is currently focused. Any click on any card will now unfocus.
+            setFocusedCard(null);
           }
         } else {
           // This was a drag, update the card's position
@@ -441,5 +441,5 @@ export function useParallax(
     };
   }, []); 
 
-  return { getCardEventHandlers, setFocusedCard, focusedCard };
+  return { getCardEventHandlers, setFocusedCard, focusedCardId: focusedCard.id };
 }

@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { forwardRef, useState, useLayoutEffect, useRef } from 'react';
+import { forwardRef, useState, useLayoutEffect, useRef, useCallback } from 'react';
 import { gsap } from 'gsap';
 import type { CardData } from '../data/cards';
 
@@ -10,16 +10,28 @@ interface CardProps {
   card: CardData;
   isDragging: boolean;
   isFocused: boolean;
+  isDimmed: boolean;
   eventHandlers: {
     onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
   }
 }
 
-export const Card = forwardRef<HTMLDivElement, CardProps>(({ card, isDragging, isFocused, eventHandlers }, ref) => {
+export const Card = forwardRef<HTMLDivElement, CardProps>(({ card, isDragging, isFocused, isDimmed, eventHandlers }, ref) => {
   const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const imageRef = useRef<HTMLImageElement>(null);
   const placeholderRef = useRef<HTMLDivElement>(null);
   const hoverAnimationRef = useRef<gsap.core.Tween | null>(null);
+  const elRef = useRef<HTMLDivElement>(null);
+
+  // This callback will be used to set both our internal ref and the forwarded ref.
+  const setRefs = useCallback((node: HTMLDivElement | null) => {
+    elRef.current = node;
+    if (typeof ref === 'function') {
+      ref(node);
+    } else if (ref) {
+      ref.current = node;
+    }
+  }, [ref]);
 
   useLayoutEffect(() => {
     if (imageStatus === 'loading' && placeholderRef.current) {
@@ -29,6 +41,20 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(({ card, isDragging, i
       return () => { pulseAnimation.kill(); };
     }
   }, [imageStatus]);
+
+  useLayoutEffect(() => {
+    if (!elRef.current) return;
+    
+    // Animate all properties for the focus/unfocus effect using GSAP.
+    gsap.to(elRef.current, {
+      scale: isDimmed ? card.position.scale * 0.95 : card.position.scale,
+      opacity: isDimmed ? 0.15 : 1,
+      filter: isDimmed ? 'saturate(0) blur(2px)' : 'saturate(1) blur(0px)',
+      duration: 0.7,
+      ease: 'power3.out',
+    });
+  }, [isDimmed, card.position.scale]);
+
 
   const handleImageLoad = () => {
     setImageStatus('loaded');
@@ -42,7 +68,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(({ card, isDragging, i
   };
 
   const handlePointerEnter = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isDragging || isFocused) return;
+    if (isDragging || isFocused || isDimmed) return;
     if (hoverAnimationRef.current) hoverAnimationRef.current.kill();
     hoverAnimationRef.current = gsap.to(e.currentTarget, {
       scale: card.position.scale * 1.05,
@@ -66,7 +92,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(({ card, isDragging, i
   return (
     <div
       className="card"
-      ref={ref}
+      ref={setRefs}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       onPointerDown={eventHandlers.onPointerDown}

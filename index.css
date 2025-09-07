@@ -69,8 +69,9 @@ html, body, #root {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    will-change: transform, opacity;
+    will-change: transform, opacity, filter;
     box-shadow: 0 10px 20px rgba(0,0,0,0.05), 0 3px 6px rgba(0,0,0,0.08);
+    filter: saturate(1) blur(0px);
 }
 
 .card-header {

@@ -14,7 +14,7 @@ export function App() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
-  const { getCardEventHandlers, setFocusedCard, focusedCard } = useParallax(containerRef, layerRefs, sceneRef, cardRefs);
+  const { getCardEventHandlers, setFocusedCard, focusedCardId } = useParallax(containerRef, layerRefs, sceneRef, cardRefs);
 
   const handleBackgroundPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     // If the user clicks on the container itself (the background), unfocus any card.
@@ -40,7 +40,7 @@ export function App() {
             cards={CARD_DATA.filter(card => card.layer === i)}
             cardRefs={cardRefs}
             getCardEventHandlers={getCardEventHandlers}
-            focusedCard={focusedCard}
+            focusedCardId={focusedCardId}
           />
         ))}
       </div>

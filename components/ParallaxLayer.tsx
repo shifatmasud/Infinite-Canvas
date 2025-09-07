@@ -17,11 +17,11 @@ interface ParallaxLayerProps {
         onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
     };
   };
-  focusedCard: { id: string | null; tileIndex: number | null };
+  focusedCardId: string | null;
 }
 
 export const ParallaxLayer = forwardRef<HTMLDivElement, ParallaxLayerProps>(
-  ({ className, cards, cardRefs, getCardEventHandlers, focusedCard }, ref) => {
+  ({ className, cards, cardRefs, getCardEventHandlers, focusedCardId }, ref) => {
     return (
       <div className={`parallax-layer ${className}`} ref={ref}>
         {TILE_OFFSETS.map((offset, i) => (
@@ -34,7 +34,9 @@ export const ParallaxLayer = forwardRef<HTMLDivElement, ParallaxLayerProps>(
           >
             {cards.map(card => {
               const { isDragging, eventHandlers } = getCardEventHandlers(card, i);
-              const isFocused = card.id === focusedCard.id && i === focusedCard.tileIndex;
+              const isFocused = card.id === focusedCardId;
+              const isDimmed = focusedCardId !== null && !isFocused;
+
               return (
                 <Card 
                   key={`${card.id}-${i}`} 
@@ -46,6 +48,7 @@ export const ParallaxLayer = forwardRef<HTMLDivElement, ParallaxLayerProps>(
                   }}
                   isDragging={isDragging}
                   isFocused={isFocused}
+                  isDimmed={isDimmed}
                   eventHandlers={eventHandlers}
                 />
               )
