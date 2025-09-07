@@ -5,7 +5,7 @@
 import { useRef } from 'react';
 import { ParallaxLayer } from './components/ParallaxLayer';
 import { useParallax } from './hooks/useParallax';
-import { CARD_DATA } from './data/cards';
+import { CARD_DATA, CardData } from './data/cards';
 import { config } from './config/parallax';
 
 export function App() {
@@ -14,7 +14,7 @@ export function App() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
-  useParallax(containerRef, layerRefs, sceneRef, cardRefs);
+  const { getCardEventHandlers } = useParallax(containerRef, layerRefs, sceneRef, cardRefs);
 
   return (
     <div 
@@ -31,6 +31,7 @@ export function App() {
             className={layer.className}
             cards={CARD_DATA.filter(card => card.layer === i)}
             cardRefs={cardRefs}
+            getCardEventHandlers={getCardEventHandlers}
           />
         ))}
       </div>

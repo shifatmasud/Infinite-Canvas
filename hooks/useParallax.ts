@@ -2,11 +2,13 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { useEffect, RefObject, useRef } from 'react';
+import { RefObject, useRef, useLayoutEffect, useState, useCallback } from 'react';
 import { gsap } from 'gsap';
 import { config, TILE_OFFSETS } from '../config/parallax';
-import { createInteractionEngine } from '../engine/interaction';
-import { CARD_DATA } from '../data/cards';
+import { createInteractionEngine, InteractionEngine } from '../engine/interaction';
+import { CARD_DATA, CardData } from '../data/cards';
+
+type InteractionMode = 'IDLE' | 'PANNING' | 'DRAGGING_CARD';
 
 export function useParallax(
   containerRef: RefObject<HTMLDivElement>,
@@ -14,145 +16,261 @@ export function useParallax(
   sceneRef: RefObject<HTMLDivElement>,
   cardRefs: RefObject<{ [key: string]: HTMLDivElement | null }>
 ) {
-  const position = useRef({ x: 0, y: 0 }); // Smoothly interpolated position
-  const targetPosition = useRef({ x: 0, y: 0 }); // Immediate target position from input
-  const zoom = useRef({ scale: 1 }); // Smoothly interpolated zoom
-  const targetZoom = useRef({ scale: 1 }); // Immediate target zoom from input
+  const panPosition = useRef({ x: 0, y: 0 });
+  const panVelocity = useRef({ x: 0, y: 0 });
+  const cameraZ = useRef(0);
+  const targetCameraZ = useRef(0);
+  const zoomVelocity = useRef(0);
+  const worldSize = useRef({ width: config.baseWorldWidth, height: config.baseWorldHeight });
+  const viewportSize = useRef({ width: 0, height: 0 });
+  
+  const draggedCardDeltas = useRef<{ [key: string]: { x: number; y: number } }>({});
+  
+  const interactionState = useRef<{
+    mode: InteractionMode;
+    cardId: string | null;
+    pointerStart: { x: number; y: number };
+    dragStartDelta: { x: number; y: number };
+    liveDelta: { x: number; y: number };
+  }>({
+    mode: 'IDLE',
+    cardId: null,
+    pointerStart: { x: 0, y: 0 },
+    dragStartDelta: { x: 0, y: 0 },
+    liveDelta: { x: 0, y: 0 },
+  });
+
+  const [interactionEngine, setInteractionEngine] = useState<InteractionEngine | null>(null);
+  const [activeDragCardId, setActiveDragCardId] = useState<string | null>(null);
+
+  const getEffectiveScale = useCallback(() => {
+    const PERSPECTIVE = 1000;
+    const safeCameraZ = Math.min(cameraZ.current, PERSPECTIVE - 1);
+    return PERSPECTIVE / (PERSPECTIVE - safeCameraZ);
+  }, []);
+
+  const handlePointerMove = useCallback((event: PointerEvent) => {
+    if (interactionState.current.mode !== 'DRAGGING_CARD') return;
+    const { pointerStart } = interactionState.current;
+    const effectiveScale = getEffectiveScale();
+
+    interactionState.current.liveDelta = {
+      x: (event.clientX - pointerStart.x) / effectiveScale,
+      y: (event.clientY - pointerStart.y) / effectiveScale,
+    };
+  }, [getEffectiveScale]);
+  
+  const handlePointerUp = useCallback(() => {
+    if (interactionState.current.mode !== 'DRAGGING_CARD') return;
+    
+    const { cardId, dragStartDelta, liveDelta } = interactionState.current;
+    if (cardId) {
+      draggedCardDeltas.current[cardId] = {
+        x: dragStartDelta.x + liveDelta.x,
+        y: dragStartDelta.y + liveDelta.y,
+      };
+    }
+    
+    interactionState.current = { ...interactionState.current, mode: 'IDLE', cardId: null, liveDelta: {x: 0, y: 0} };
+    setActiveDragCardId(null);
+    interactionEngine?.enable();
+
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
+  }, [interactionEngine, handlePointerMove]);
+
+  const handlePointerDown = useCallback((card: CardData, event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    interactionEngine?.disable();
+    
+    interactionState.current = {
+      mode: 'DRAGGING_CARD',
+      cardId: card.id,
+      pointerStart: { x: event.clientX, y: event.clientY },
+      dragStartDelta: draggedCardDeltas.current[card.id] || { x: 0, y: 0 },
+      liveDelta: { x: 0, y: 0 }
+    };
+    setActiveDragCardId(card.id);
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+  }, [interactionEngine, handlePointerMove, handlePointerUp]);
+
+  const getCardEventHandlers = useCallback((card: CardData) => ({
+      isDragging: card.id === activeDragCardId,
+      eventHandlers: {
+        onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => handlePointerDown(card, e),
+      }
+  }), [activeDragCardId, handlePointerDown]);
 
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-
     const scene = sceneRef.current;
     if (!scene) return;
-
-    const allCards = cardRefs.current;
-    if (!allCards) return;
     
-    gsap.killTweensOf([position.current, targetPosition.current, zoom.current, targetZoom.current]);
-    
-    const viewport = { width: container.clientWidth, height: container.clientHeight };
+    let layoutScaleFactor = 1;
 
-    const interactionEngine = createInteractionEngine(container, {
+    const updateLayout = () => {
+      viewportSize.current = { width: container.clientWidth, height: container.clientHeight };
+      const WORLD_SCALE_FACTOR = 3;
+      const newWorldWidth = viewportSize.current.width * WORLD_SCALE_FACTOR;
+      layoutScaleFactor = newWorldWidth / config.baseWorldWidth;
+      const newWorldHeight = config.baseWorldHeight * layoutScaleFactor;
+      
+      worldSize.current = { width: newWorldWidth, height: newWorldHeight };
+      const allCards = cardRefs.current;
+      if (!allCards) return;
+
+      layerRefs.current?.forEach(layer => {
+        if (!layer) return;
+        const tiles = layer.querySelectorAll<HTMLDivElement>('.parallax-tile');
+        tiles.forEach((tile, i) => {
+          const offset = TILE_OFFSETS[i];
+          gsap.set(tile, { transform: `translate(${offset.x * newWorldWidth}px, ${offset.y * newWorldHeight}px)` });
+        });
+      });
+
+      CARD_DATA.forEach(card => {
+        const draggedDelta = draggedCardDeltas.current[card.id] || { x: 0, y: 0 };
+        const initialX = card.position.x * layoutScaleFactor;
+        const initialY = card.position.y * layoutScaleFactor;
+
+        TILE_OFFSETS.forEach((_, tileIndex) => {
+          const cardKey = `${card.id}-${tileIndex}`;
+          const cardElement = allCards[cardKey];
+          if (cardElement) {
+            gsap.set(cardElement, {
+              x: initialX + draggedDelta.x,
+              y: initialY + draggedDelta.y,
+              width: card.position.width * layoutScaleFactor,
+              scale: card.position.scale,
+              z: 0,
+              boxShadow: '0 10px 20px rgba(0,0,0,0.05), 0 3px 6px rgba(0,0,0,0.08)',
+            });
+          }
+        });
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(updateLayout);
+    resizeObserver.observe(container);
+    updateLayout();
+    
+    const engine = createInteractionEngine(container, {
       onDrag: ({ deltaX, deltaY }) => {
-        targetPosition.current.x += (deltaX * config.scrollSpeed) / zoom.current.scale;
-        targetPosition.current.y += (deltaY * config.scrollSpeed) / zoom.current.scale;
+        const speed = config.scrollSpeed;
+        const effectiveScale = getEffectiveScale();
+        panVelocity.current.x -= (deltaX * speed) / effectiveScale;
+        panVelocity.current.y -= (deltaY * speed) / effectiveScale;
       },
       onWheelPan: ({ deltaX, deltaY }) => {
-        targetPosition.current.x += (deltaX * config.scrollSpeed) / zoom.current.scale;
-        targetPosition.current.y += (deltaY * config.scrollSpeed) / zoom.current.scale;
+        const speed = config.scrollSpeed;
+        const effectiveScale = getEffectiveScale();
+        panVelocity.current.x += (deltaX * speed) / effectiveScale;
+        panVelocity.current.y += (deltaY * speed) / effectiveScale;
       },
       onZoom: ({ deltaY }) => {
-        const ZOOM_SPEED = 0.002;
-        const MIN_ZOOM = 0.4;
-        const MAX_ZOOM = 3.0;
-
-        let newScale = targetZoom.current.scale - deltaY * ZOOM_SPEED;
-        targetZoom.current.scale = gsap.utils.clamp(MIN_ZOOM, MAX_ZOOM, newScale);
+        const ZOOM_SPEED_MULTIPLIER = 5;
+        const ANTICIPATION_AMOUNT = 30;
+        targetCameraZ.current += (deltaY > 0 ? -ANTICIPATION_AMOUNT : ANTICIPATION_AMOUNT);
+        zoomVelocity.current -= deltaY * ZOOM_SPEED_MULTIPLIER;
       }
     });
-
-    const layerPositions = config.layers.map(() => ({ x: 0, y: 0 }));
+    setInteractionEngine(engine);
 
     const ticker = gsap.ticker.add(() => {
       const layerElements = layerRefs.current?.filter(el => el !== null) as HTMLDivElement[] | undefined;
-      if (!layerElements) return;
+      if (!layerElements || !scene) return;
 
-      const LERP_FACTOR = 0.08;
+      // Pan & Zoom Physics
+      const LERP_FACTOR = 0.1;
+      const PAN_DAMPING_FACTOR = 0.90;
+      const ZOOM_DAMPING_FACTOR = 0.88;
+      const MIN_CAMERA_Z = -4000;
+      const MAX_CAMERA_Z = 750;
 
-      // --- LERP towards target zoom ---
-      zoom.current.scale += (targetZoom.current.scale - zoom.current.scale) * LERP_FACTOR;
-      if (Math.abs(targetZoom.current.scale - zoom.current.scale) < 0.001) {
-        zoom.current.scale = targetZoom.current.scale;
-      }
-      
-      // --- LERP towards target position ---
-      position.current.x += (targetPosition.current.x - position.current.x) * LERP_FACTOR;
-      position.current.y += (targetPosition.current.y - position.current.y) * LERP_FACTOR;
+      targetCameraZ.current += zoomVelocity.current;
+      targetCameraZ.current = gsap.utils.clamp(MIN_CAMERA_Z, MAX_CAMERA_Z, targetCameraZ.current);
+      zoomVelocity.current *= ZOOM_DAMPING_FACTOR;
+      cameraZ.current += (targetCameraZ.current - cameraZ.current) * LERP_FACTOR;
 
-      if (Math.abs(targetPosition.current.x - position.current.x) < 0.01) {
-        position.current.x = targetPosition.current.x;
-      }
-      if (Math.abs(targetPosition.current.y - position.current.y) < 0.01) {
-        position.current.y = targetPosition.current.y;
-      }
+      panPosition.current.x += panVelocity.current.x;
+      panPosition.current.y += panVelocity.current.y;
+      panVelocity.current.x *= PAN_DAMPING_FACTOR;
+      panVelocity.current.y *= PAN_DAMPING_FACTOR;
 
-      // Apply zoom to the scene
-      gsap.set(scene, { scale: zoom.current.scale });
-
+      // Scene & Layer Updates
+      gsap.set(scene, { z: cameraZ.current });
       layerElements.forEach((layer, i) => {
         const layerConfig = config.layers[i];
-        const currentPos = layerPositions[i];
-        
-        const targetX = position.current.x * layerConfig.depth;
-        const targetY = position.current.y * layerConfig.depth;
-
-        currentPos.x += (targetX - currentPos.x) * layerConfig.lag;
-        currentPos.y += (targetY - currentPos.y) * layerConfig.lag;
-
-        const wrap = (value: number, max: number) => {
-          const range = max;
-          const half = range / 2;
-          return ((((value + half) % range) + range) % range) - half;
-        };
-
-        const wrappedX = wrap(currentPos.x, config.worldWidth);
-        const wrappedY = wrap(currentPos.y, config.worldHeight);
-        
-        gsap.set(layer, { x: wrappedX, y: wrappedY });
-
-        // --- Dynamic Z-Depth Calculation ---
-        const layerCards = CARD_DATA.filter(card => card.layer === i);
-        const focusRadius = Math.min(viewport.width, viewport.height) * 0.7;
-        const maxZBoost = 150;
-        const zJitterRange = 40; // The range for the z-offset (+/- 20px)
-
-        // A simple hashing function to create a deterministic "random" value from a string.
-        const simpleHash = (s: string) => s.split('').reduce((a, b) => {
-            a = ((a << 5) - a) + b.charCodeAt(0);
-            return a & a;
-        }, 0);
-
-        TILE_OFFSETS.forEach((offset, tileIndex) => {
-            const tileX = offset.x * config.worldWidth;
-            const tileY = offset.y * config.worldHeight;
-
-            layerCards.forEach(card => {
-                const cardKey = `${card.id}-${tileIndex}`;
-                const cardElement = allCards[cardKey];
-                if (!cardElement) return;
-
-                const cardWorldX = card.position.x + tileX;
-                const cardWorldY = card.position.y + tileY;
-                
-                const distFromCenterX = cardWorldX - currentPos.x;
-                const distFromCenterY = cardWorldY - currentPos.y;
-                
-                const distance = Math.hypot(distFromCenterX, distFromCenterY);
-
-                const proximity = Math.max(0, 1 - (distance / focusRadius));
-                const zBoost = Math.pow(proximity, 2) * maxZBoost;
-                
-                // Add a deterministic jitter based on the card's ID
-                const hash = simpleHash(card.id);
-                const zJitter = (hash % zJitterRange) - (zJitterRange / 2);
-
-                // Apply jitter permanently to give each card a unique base depth
-                const finalZ = card.position.z + zBoost + zJitter;
-                
-                cardElement.style.setProperty('--transform', `translateZ(${finalZ}px) scale(${card.position.scale})`);
-            });
-        });
-
+        const targetX = panPosition.current.x * layerConfig.speed;
+        const targetY = panPosition.current.y * layerConfig.speed;
+        const wrap = (value: number, max: number) => ((((value + max / 2) % max) + max) % max) - max / 2;
+        gsap.set(layer, { x: wrap(targetX, worldSize.current.width), y: wrap(targetY, worldSize.current.height), z: layerConfig.baseZ });
       });
+
+      // Unified Card Drag Physics & Animation
+      const { mode, cardId, dragStartDelta, liveDelta } = interactionState.current;
+      if (mode === 'DRAGGING_CARD' && cardId && cardRefs.current) {
+        const cardConfig = CARD_DATA.find(c => c.id === cardId);
+        if (!cardConfig) return;
+
+        const initialX = cardConfig.position.x * layoutScaleFactor;
+        const initialY = cardConfig.position.y * layoutScaleFactor;
+        
+        const liveX = initialX + dragStartDelta.x + liveDelta.x;
+        const liveY = initialY + dragStartDelta.y + liveDelta.y;
+
+        TILE_OFFSETS.forEach((_, tileIndex) => {
+          const cardKey = `${cardId}-${tileIndex}`;
+          const cardElement = cardRefs.current?.[cardKey];
+          if (cardElement) {
+            gsap.to(cardElement, {
+              x: liveX,
+              y: liveY,
+              scale: cardConfig.position.scale * 1.05,
+              z: 100,
+              boxShadow: '0 25px 50px rgba(0,0,0,0.15), 0 10px 20px rgba(0,0,0,0.1)',
+              duration: 0.3,
+              ease: 'power2.out',
+              overwrite: 'auto'
+            });
+          }
+        });
+      } else if (activeDragCardId === null) { // Ensure settle animation happens after state is cleared
+          CARD_DATA.forEach(cardConfig => {
+              const cardElement = cardRefs.current?.[`${cardConfig.id}-0`];
+              if(cardElement && (gsap.getProperty(cardElement, "z") as number) > 0) {
+                 TILE_OFFSETS.forEach((_, tileIndex) => {
+                     const cardKey = `${cardConfig.id}-${tileIndex}`;
+                     const el = cardRefs.current?.[cardKey];
+                     if(el) {
+                          gsap.to(el, {
+                              scale: cardConfig.position.scale,
+                              z: 0,
+                              boxShadow: '0 10px 20px rgba(0,0,0,0.05), 0 3px 6px rgba(0,0,0,0.08)',
+                              duration: 0.4,
+                              ease: 'power2.out',
+                              overwrite: 'auto'
+                          });
+                     }
+                 });
+              }
+          });
+      }
     });
 
     return () => {
-      interactionEngine.kill();
+      resizeObserver.disconnect();
+      engine.kill();
       gsap.ticker.remove(ticker);
-      gsap.killTweensOf([position.current, targetPosition.current, zoom.current, targetZoom.current]);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
     };
+  }, []); // Note: Empty dependency array is intentional for this singleton-like hook.
 
-  }, [containerRef, layerRefs, sceneRef, cardRefs]);
+  return { getCardEventHandlers };
 }

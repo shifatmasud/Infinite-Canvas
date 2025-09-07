@@ -13,26 +13,28 @@ interface InteractionCallbacks {
   onZoom: ({ deltaY }: { deltaY: number; }) => void;
 }
 
+export interface InteractionEngine {
+  kill: () => void;
+  enable: () => void;
+  disable: () => void;
+}
+
 export function createInteractionEngine(
   target: HTMLElement,
   callbacks: InteractionCallbacks
-) {
+): InteractionEngine {
   const observer = Observer.create({
     target,
     type: 'wheel,touch,pointer',
     dragMinimum: 2,
     onDrag: self => {
-      // Direct manipulation: content moves with the pointer.
-      callbacks.onDrag({ deltaX: self.deltaX, deltaY: self.deltaY });
+      callbacks.onDrag({ deltaX: -self.deltaX, deltaY: -self.deltaY });
     },
     onWheel: self => {
-      // FIX: Cast event to WheelEvent to access ctrlKey and metaKey properties.
       const wheelEvent = self.event as WheelEvent;
       if (wheelEvent.ctrlKey || wheelEvent.metaKey) {
-        // Zooming
         callbacks.onZoom({ deltaY: self.deltaY });
       } else {
-        // Inverted for "natural" scroll feel (content moves opposite to pointer)
         callbacks.onWheelPan({ deltaX: -self.deltaX, deltaY: -self.deltaY });
       }
     },
@@ -40,8 +42,8 @@ export function createInteractionEngine(
   });
 
   return {
-    kill: () => {
-      observer.kill();
-    }
+    kill: () => observer.kill(),
+    enable: () => observer.enable(),
+    disable: () => observer.disable(),
   };
 }

@@ -11,10 +11,16 @@ interface ParallaxLayerProps {
   className: string;
   cards: CardData[];
   cardRefs: RefObject<{ [key: string]: HTMLDivElement | null }>;
+  getCardEventHandlers: (card: CardData) => {
+    isDragging: boolean;
+    eventHandlers: {
+        onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
+    };
+  };
 }
 
 export const ParallaxLayer = forwardRef<HTMLDivElement, ParallaxLayerProps>(
-  ({ className, cards, cardRefs }, ref) => {
+  ({ className, cards, cardRefs, getCardEventHandlers }, ref) => {
     return (
       <div className={`parallax-layer ${className}`} ref={ref}>
         {TILE_OFFSETS.map((offset, i) => (
@@ -22,20 +28,25 @@ export const ParallaxLayer = forwardRef<HTMLDivElement, ParallaxLayerProps>(
             key={i}
             className="parallax-tile"
             style={{
-              transform: `translate(${offset.x * config.worldWidth}px, ${offset.y * config.worldHeight}px)`
+              transform: `translate(${offset.x * config.baseWorldWidth}px, ${offset.y * config.baseWorldHeight}px)`
             }}
           >
-            {cards.map(card => (
-              <Card 
-                key={`${card.id}-${i}`} 
-                card={card}
-                ref={(el: HTMLDivElement | null) => {
-                  if (cardRefs.current) {
-                    cardRefs.current[`${card.id}-${i}`] = el;
-                  }
-                }}
-              />
-            ))}
+            {cards.map(card => {
+              const { isDragging, eventHandlers } = getCardEventHandlers(card);
+              return (
+                <Card 
+                  key={`${card.id}-${i}`} 
+                  card={card}
+                  ref={(el: HTMLDivElement | null) => {
+                    if (cardRefs.current) {
+                      cardRefs.current[`${card.id}-${i}`] = el;
+                    }
+                  }}
+                  isDragging={isDragging}
+                  eventHandlers={eventHandlers}
+                />
+              )
+            })}
           </div>
         ))}
       </div>

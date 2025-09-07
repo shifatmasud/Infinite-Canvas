@@ -2,55 +2,84 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { CSSProperties, forwardRef, useState } from 'react';
+import { forwardRef, useState, useLayoutEffect, useRef } from 'react';
+import { gsap } from 'gsap';
 import type { CardData } from '../data/cards';
 
 interface CardProps {
   card: CardData;
+  isDragging: boolean;
+  eventHandlers: {
+    onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
+  }
 }
 
-export const Card = forwardRef<HTMLDivElement, CardProps>(({ card }, ref) => {
+export const Card = forwardRef<HTMLDivElement, CardProps>(({ card, isDragging, eventHandlers }, ref) => {
   const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const imageRef = useRef<HTMLImageElement>(null);
+  const placeholderRef = useRef<HTMLDivElement>(null);
+  const hoverAnimationRef = useRef<gsap.core.Tween | null>(null);
+
+  useLayoutEffect(() => {
+    if (imageStatus === 'loading' && placeholderRef.current) {
+      const pulseAnimation = gsap.to(placeholderRef.current, {
+        opacity: 0.6, duration: 0.8, repeat: -1, yoyo: true, ease: 'power1.inOut'
+      });
+      return () => { pulseAnimation.kill(); };
+    }
+  }, [imageStatus]);
 
   const handleImageLoad = () => {
     setImageStatus('loaded');
+    if (imageRef.current) {
+      gsap.to(imageRef.current, { opacity: 1, duration: 0.5, ease: 'power2.out' });
+    }
   };
 
   const handleImageError = () => {
     setImageStatus('error');
   };
 
+  const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragging) return;
+    if (hoverAnimationRef.current) hoverAnimationRef.current.kill();
+    hoverAnimationRef.current = gsap.to(e.currentTarget, {
+      scale: card.position.scale * 1.05,
+      duration: 0.5,
+      ease: 'power3.out',
+    });
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (hoverAnimationRef.current) hoverAnimationRef.current.kill();
+    hoverAnimationRef.current = gsap.to(e.currentTarget, {
+      scale: card.position.scale,
+      duration: 0.5,
+      ease: 'power3.out',
+    });
+  };
+
   return (
     <div
-      key={card.id}
       className="card"
       ref={ref}
-      style={{
-        left: `${card.position.x}px`,
-        top: `${card.position.y}px`,
-        width: `${card.position.width}px`,
-        '--transform': `translateZ(${card.position.z}px) scale(${card.position.scale})`
-      } as CSSProperties}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onPointerDown={eventHandlers.onPointerDown}
+      style={{ touchAction: 'none' }} // Required for pointer events
     >
       <div className="card-header">
         <span className="card-title">{card.title}</span>
         <span className="card-meta">{card.meta}</span>
       </div>
       <div className="card-image-wrapper">
-        {imageStatus === 'loading' && <div className="card-image-placeholder" />}
+        {imageStatus === 'loading' && <div className="card-image-placeholder" ref={placeholderRef} />}
         {imageStatus === 'error' && (
-          <div className="card-image-error">
-            <span>Image not available</span>
-          </div>
+          <div className="card-image-error"><span>Image not available</span></div>
         )}
         <img
-          src={card.image}
-          alt={card.title}
-          className={`card-image ${imageStatus === 'loaded' ? 'loaded' : ''}`}
-          loading="lazy"
-          draggable={false}
-          onLoad={handleImageLoad}
-          onError={handleImageError}
+          ref={imageRef} src={card.image} alt={card.title} className="card-image"
+          loading="lazy" draggable={false} onLoad={handleImageLoad} onError={handleImageError}
         />
       </div>
     </div>

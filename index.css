@@ -70,13 +70,7 @@ html, body, #root {
     display: flex;
     flex-direction: column;
     will-change: transform, opacity;
-    transform: var(--transform);
-    transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.4s ease;
     box-shadow: 0 10px 20px rgba(0,0,0,0.05), 0 3px 6px rgba(0,0,0,0.08);
-}
-
-.card:hover {
-    transform: var(--transform) scale(1.03) translateZ(25px);
 }
 
 .card-header {
@@ -123,16 +117,6 @@ html, body, #root {
 
 .card-image-placeholder {
     background-color: #e9ecef;
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: .5;
-  }
 }
 
 .card-image-error {
@@ -148,9 +132,4 @@ html, body, #root {
     display: block;
     object-fit: cover;
     opacity: 0;
-    transition: opacity 0.4s ease-in-out;
-}
-
-.card-image.loaded {
-    opacity: 1;
 }
