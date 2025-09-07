@@ -349,8 +349,25 @@ export function useParallax(
             let cardTargetZ = PERSPECTIVE - (PERSPECTIVE / requiredScale) - layerConfig.baseZ;
             cardTargetZ = gsap.utils.clamp(MIN_CAMERA_Z, MAX_CAMERA_Z, cardTargetZ);
             
-            panPosition.current.x += (cardTargetPanX - panPosition.current.x) * LERP_FACTOR_FOCUS;
-            panPosition.current.y += (cardTargetPanY - panPosition.current.y) * LERP_FACTOR_FOCUS;
+            // --- Find the closest wrapped target to prevent jarring jumps ---
+            // The world repeats for each layer based on its speed. We need to find the
+            // equivalent target pan position that is closest to the current pan position.
+            const panPeriodX = layerConfig.speed > 0 ? worldSize.current.width / layerConfig.speed : 0;
+            const panPeriodY = layerConfig.speed > 0 ? worldSize.current.height / layerConfig.speed : 0;
+
+            const panDiffX = panPosition.current.x - cardTargetPanX;
+            const panDiffY = panPosition.current.y - cardTargetPanY;
+
+            // Calculate how many 'periods' away the shortest path is.
+            const wrapX = panPeriodX > 0 ? Math.round(panDiffX / panPeriodX) : 0;
+            const wrapY = panPeriodY > 0 ? Math.round(panDiffY / panPeriodY) : 0;
+
+            // Adjust the target to the closest equivalent position.
+            const closestTargetPanX = cardTargetPanX + (wrapX * panPeriodX);
+            const closestTargetPanY = cardTargetPanY + (wrapY * panPeriodY);
+            
+            panPosition.current.x += (closestTargetPanX - panPosition.current.x) * LERP_FACTOR_FOCUS;
+            panPosition.current.y += (closestTargetPanY - panPosition.current.y) * LERP_FACTOR_FOCUS;
             cameraZ.current += (cardTargetZ - cameraZ.current) * LERP_FACTOR_FOCUS;
         }
       }
