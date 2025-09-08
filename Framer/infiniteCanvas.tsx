@@ -10,17 +10,19 @@ import {
     useState,
     useCallback,
     useEffect,
-    ForwardedRef,
     CSSProperties,
     useMemo,
+    // FIX: Import ComponentProps to correctly infer props type for SearchBar.
+    ComponentProps,
 } from "react"
 import { gsap } from "gsap"
 import { Observer } from "gsap/Observer"
 import { addPropertyControls, ControlType, Frame } from "framer"
+// FIX: Changed import to get SearchBar props via ComponentProps.
+import SearchBar from "./SearchBar.tsx"
 
 // ================================================================================================
 // STYLES
-// All CSS is now dynamic, based on props, to make the canvas fully themeable.
 // ================================================================================================
 
 const getDynamicStyles = ({
@@ -511,8 +513,14 @@ function useParallax(
     cardDimensions: CardDimensions,
     interactionConfig: typeof defaultProps.interaction,
     tilingConfig: typeof defaultProps.tiling,
-    TILE_OFFSETS: { x: number; y: number }[]
+    TILE_OFFSETS: { x: number; y: number }[],
+    focusedCardState: [
+        string | null,
+        React.Dispatch<React.SetStateAction<string | null>>,
+    ]
 ) {
+    const [focusedCardId, setFocusedCardId] = focusedCardState
+
     const {
         globalScale,
         enableDragPan,
@@ -555,22 +563,14 @@ function useParallax(
     )
     const lastDraggedCardId = useRef<string | null>(null)
 
-    const [focusedCard, setFocusedCardState] = useState<{
-        id: string | null
-        tileIndex: number | null
-    }>({ id: null, tileIndex: null })
-    const focusedCardRef = useRef<{
-        id: string | null
-        tileIndex: number | null
-    }>({ id: null, tileIndex: null })
+    const internalTileIndex = useRef<number | null>(null)
 
     const setFocusedCard = useCallback(
         (id: string | null, tileIndex: number | null = null) => {
-            const newFocusState = { id, tileIndex }
-            focusedCardRef.current = newFocusState
-            setFocusedCardState(newFocusState)
+            setFocusedCardId(id)
+            internalTileIndex.current = tileIndex
         },
-        []
+        [setFocusedCardId]
     )
 
     const getEffectiveScale = useCallback(() => {
@@ -607,8 +607,7 @@ function useParallax(
             if (tileIndex !== null) {
                 if (isClick) {
                     if (enableFocusClick) {
-                        const { id: currentFocusedId } = focusedCardRef.current
-                        if (currentFocusedId === null) {
+                        if (focusedCardId === null) {
                             setFocusedCard(cardId, tileIndex)
                         } else {
                             setFocusedCard(null)
@@ -635,7 +634,7 @@ function useParallax(
 
         window.removeEventListener("pointermove", handlePointerMove)
         window.removeEventListener("pointerup", handlePointerUp)
-    }, [handlePointerMove, setFocusedCard, enableFocusClick])
+    }, [handlePointerMove, setFocusedCard, enableFocusClick, focusedCardId])
 
     const handlePointerDown = useCallback(
         (
@@ -780,9 +779,9 @@ function useParallax(
                     (deltaY > 0 ? -ANTICIPATION_AMOUNT : ANTICIPATION_AMOUNT)
                 const PERSPECTIVE = 1000
                 let refLayerIndex = 1
-                const { id: currentFocusedId } = focusedCardRef.current
-                if (currentFocusedId) {
-                    const card = cards.find((c) => c.id === currentFocusedId)
+
+                if (focusedCardId) {
+                    const card = cards.find((c) => c.id === focusedCardId)
                     if (card) {
                         refLayerIndex = card.layer
                     }
@@ -842,12 +841,9 @@ function useParallax(
             panVelocity.current.x *= PAN_DAMPING_FACTOR
             panVelocity.current.y *= PAN_DAMPING_FACTOR
 
-            const { id: currentFocusedId, tileIndex: currentFocusedTileIndex } =
-                focusedCardRef.current
-
-            if (currentFocusedId && currentFocusedTileIndex !== null) {
-                const card = cards.find((c) => c.id === currentFocusedId)
-                const tileIndex = currentFocusedTileIndex
+            if (focusedCardId && internalTileIndex.current !== null) {
+                const card = cards.find((c) => c.id === focusedCardId)
+                const tileIndex = internalTileIndex.current
 
                 if (card) {
                     const layerConfig = config.layers[card.layer]
@@ -1036,12 +1032,13 @@ function useParallax(
         interactionConfig,
         tilingConfig,
         TILE_OFFSETS,
-    ]) // Rerun effect if cards, config or dimensions change
+        focusedCardId,
+        setFocusedCardId,
+    ])
 
     return {
         getCardEventHandlers,
         setFocusedCard,
-        focusedCardId: focusedCard.id,
     }
 }
 
@@ -1107,11 +1104,27 @@ const defaultProps = {
         },
     ],
     contentSlots: [],
+    showSearchBar: false,
+    searchBarSettings: {
+        position: "top-left",
+        ...SearchBar.defaultProps,
+    },
 }
 
 // ================================================================================================
 // MAIN APP COMPONENT
 // ================================================================================================
+type SearchBarPosition =
+    | "top-left"
+    | "top-center"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-center"
+    | "bottom-right"
+    | "center-middle"
+// FIX: Infer SearchBarProps from the component to resolve import issues.
+type SearchBarProps = ComponentProps<typeof SearchBar>
+
 type InfiniteCanvasProps = {
     cards?: {
         id?: string
@@ -1128,8 +1141,60 @@ type InfiniteCanvasProps = {
     width?: string | number
     height?: string | number
     contentSlots?: React.ReactNode[]
+    showSearchBar?: boolean
+    // FIX: Add searchBarIcon to hoist it as a top-level prop.
+    searchBarIcon?: React.ReactNode
+    searchBarSettings?: Partial<
+        SearchBarProps & { position: SearchBarPosition }
+    >
 }
 
+const getSearchBarPositionStyle = (
+    position: SearchBarPosition
+): CSSProperties => {
+    const baseStyle: CSSProperties = {
+        position: "absolute",
+        zIndex: 1000,
+    }
+
+    switch (position) {
+        case "top-center":
+            return {
+                ...baseStyle,
+                top: 20,
+                left: "50%",
+                transform: "translateX(-50%)",
+            }
+        case "top-right":
+            return { ...baseStyle, top: 20, right: 20 }
+        case "bottom-left":
+            return { ...baseStyle, bottom: 20, left: 20 }
+        case "bottom-center":
+            return {
+                ...baseStyle,
+                bottom: 20,
+                left: "50%",
+                transform: "translateX(-50%)",
+            }
+        case "bottom-right":
+            return { ...baseStyle, bottom: 20, right: 20 }
+        case "center-middle":
+            return {
+                ...baseStyle,
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+            }
+        case "top-left":
+        default:
+            return { ...baseStyle, top: 20, left: 20 }
+    }
+}
+
+/**
+ * @framerSupportedLayoutWidth fill
+ * @framerSupportedLayoutHeight fill
+ */
 export function InfiniteCanvas({
     cards: rawCards = defaultProps.cards,
     appearance = defaultProps.appearance,
@@ -1139,9 +1204,19 @@ export function InfiniteCanvas({
     width = defaultProps.width,
     height = defaultProps.height,
     contentSlots = defaultProps.contentSlots,
+    showSearchBar = defaultProps.showSearchBar,
+    searchBarSettings: rawSearchBarSettings,
+    // FIX: Accept searchBarIcon as a direct prop.
+    searchBarIcon,
 }: InfiniteCanvasProps) {
     const idMapRef = useRef(new WeakMap<object, string>())
     const [cardDimensions, setCardDimensions] = useState<CardDimensions>({})
+    const [focusedCardId, setFocusedCardId] = useState<string | null>(null)
+
+    const searchBarSettings = {
+        ...defaultProps.searchBarSettings,
+        ...rawSearchBarSettings,
+    }
 
     const handleCardResize = useCallback(
         (cardId: string, dimensions: { width: number; height: number }) => {
@@ -1221,7 +1296,7 @@ export function InfiniteCanvas({
         [layout, interaction.scrollSpeed]
     )
 
-    const { getCardEventHandlers, setFocusedCard, focusedCardId } = useParallax(
+    const { getCardEventHandlers, setFocusedCard } = useParallax(
         containerRef,
         layerRefs,
         sceneRef,
@@ -1231,14 +1306,22 @@ export function InfiniteCanvas({
         cardDimensions,
         interaction,
         tiling,
-        TILE_OFFSETS
+        TILE_OFFSETS,
+        [focusedCardId, setFocusedCardId]
     )
+
+    useEffect(() => {
+        // If an external change causes the focused card to no longer exist, unfocus it.
+        if (focusedCardId && !cards.some((c) => c.id === focusedCardId)) {
+            setFocusedCardId(null)
+        }
+    }, [cards, focusedCardId])
 
     const handleBackgroundPointerDown = (
         e: React.PointerEvent<HTMLDivElement>
     ) => {
         if (e.target === e.currentTarget) {
-            setFocusedCard(null)
+            setFocusedCardId(null)
         }
     }
 
@@ -1251,6 +1334,16 @@ export function InfiniteCanvas({
         [cards]
     )
 
+    const handleResultClick = (cardId: string) => {
+        const centralTileIndex = Math.floor(TILE_OFFSETS.length / 2)
+        setFocusedCard(cardId, centralTileIndex)
+    }
+
+    const { position: searchBarPosition = "top-left" } = searchBarSettings
+    const searchBarResultsPosition = searchBarPosition.includes("bottom")
+        ? "top"
+        : "bottom"
+
     return (
         <>
             <StyleInjector {...appearance} />
@@ -1262,6 +1355,32 @@ export function InfiniteCanvas({
                 aria-label="Interactive Parallax Directory"
                 style={{ width, height }}
             >
+                {showSearchBar && (
+                    // FIX: Use type assertion to fix type error for search bar position.
+                    <div
+                        style={getSearchBarPositionStyle(
+                            searchBarSettings.position as SearchBarPosition
+                        )}
+                    >
+                        <SearchBar
+                            cards={cards}
+                            onResultClick={handleResultClick}
+                            dimension={searchBarSettings.dimension}
+                            placeholderText={searchBarSettings.placeholderText}
+                            font={searchBarSettings.font}
+                            appearance={searchBarSettings.appearance}
+                            resultsAppearance={
+                                searchBarSettings.resultsAppearance
+                            }
+                            isExpanded={searchBarSettings.isExpanded}
+                            resultsPosition={searchBarResultsPosition}
+                            // FIX: Pass the hoisted searchBarIcon prop, with a fallback.
+                            searchIcon={
+                                searchBarIcon ?? searchBarSettings.searchIcon
+                            }
+                        />
+                    </div>
+                )}
                 <div className="parallax-scene" ref={sceneRef}>
                     {config.layers.map((layer, i) => (
                         <ParallaxLayer
@@ -1293,6 +1412,133 @@ export function InfiniteCanvas({
 InfiniteCanvas.defaultProps = defaultProps
 
 addPropertyControls(InfiniteCanvas, {
+    showSearchBar: {
+        type: ControlType.Boolean,
+        title: "Search Bar",
+        defaultValue: false,
+    },
+    // FIX: Hoist searchBarIcon control to top level to avoid nesting issues.
+    searchBarIcon: {
+        type: ControlType.ComponentInstance,
+        title: "Search Icon",
+        hidden: (props) => !props.showSearchBar,
+    },
+    searchBarSettings: {
+        type: ControlType.Object,
+        title: "Search Bar Settings",
+        hidden: (props) => !props.showSearchBar,
+        controls: {
+            position: {
+                type: ControlType.Enum,
+                title: "Position",
+                options: [
+                    "top-left",
+                    "top-center",
+                    "top-right",
+                    "bottom-left",
+                    "bottom-center",
+                    "bottom-right",
+                    "center-middle",
+                ],
+                optionTitles: [
+                    "Top Left",
+                    "Top Center",
+                    "Top Right",
+                    "Bottom Left",
+                    "Bottom Center",
+                    "Bottom Right",
+                    "Center Middle",
+                ],
+                defaultValue: "top-left",
+            },
+            isExpanded: {
+                type: ControlType.Boolean,
+                title: "Expanded",
+                description:
+                    "If the search bar is permanently expanded or starts as an icon.",
+                defaultValue: true,
+            },
+            placeholderText: {
+                type: ControlType.String,
+                title: "Placeholder",
+                defaultValue: "Search cards...",
+            },
+            font: {
+                type: ControlType.Font,
+                title: "Font",
+            },
+            dimension: {
+                type: ControlType.Object,
+                title: "Dimensions",
+                controls: {
+                    width: {
+                        type: ControlType.Number,
+                        title: "Width",
+                        defaultValue: 320,
+                        min: 40,
+                        max: 1000,
+                        step: 1,
+                    },
+                    height: {
+                        type: ControlType.Number,
+                        title: "Height",
+                        defaultValue: 48,
+                        min: 30,
+                        max: 100,
+                        step: 1,
+                    },
+                },
+            },
+            appearance: {
+                type: ControlType.Object,
+                title: "Appearance",
+                controls: {
+                    backgroundColor: {
+                        type: ControlType.Color,
+                        title: "Background",
+                        defaultValue: "#FFFFFF",
+                    },
+                    borderRadius: {
+                        type: ControlType.Number,
+                        title: "Radius",
+                        defaultValue: 8,
+                        min: 0,
+                        max: 50,
+                        step: 1,
+                    },
+                    padding: {
+                        type: ControlType.Number,
+                        title: "Padding",
+                        defaultValue: 12,
+                        min: 0,
+                        max: 50,
+                        step: 1,
+                    },
+                },
+            },
+            resultsAppearance: {
+                type: ControlType.Object,
+                title: "Results",
+                controls: {
+                    resultBackgroundColor: {
+                        type: ControlType.Color,
+                        title: "Background",
+                        defaultValue: "#FFFFFF",
+                    },
+                    resultTextColor: {
+                        type: ControlType.Color,
+                        title: "Title Color",
+                        defaultValue: "#333333",
+                    },
+                    resultMetaColor: {
+                        type: ControlType.Color,
+                        title: "Meta Color",
+                        defaultValue: "#777777",
+                    },
+                },
+            },
+        },
+    },
     cards: {
         type: ControlType.Array,
         title: "Card Data",
