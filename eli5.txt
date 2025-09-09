@@ -1,0 +1,44 @@
+
+ELI5: How This Parallax Thing Works
+(Explain Like I'm 5)
+
+Imagine you're building a play on a theater stage.
+
+---
+### The File Tree (The Crew & The Script)
+---
+
+*   `index.html`: The **Theater Building**. It's the main structure that holds everything.
+
+*   `index.tsx`: The **Director**. It just points at the main script and says, "Action!".
+
+*   `Framer/InfiniteCanvas.tsx`: This is the **Master Script** for the whole play. It has everything in one place:
+    *   The stage design (the HTML and CSS).
+    *   The list of actors and where they stand (`cards` data).
+    *   All the complex dance moves and special effects (the `useParallax` physics logic).
+    *   It's designed this way so you can easily give it to another theater (a Framer project) and it just works.
+
+*   `Framer/SearchBar.tsx`: A special **Usher with a Spotlight**. The audience can ask this usher to find an actor, and the usher will shine a spotlight on them and guide the view right to them.
+
+---
+### How The Magic Happens (The Context Map)
+---
+
+1.  **The Audience Moves:** You (the user) touch the screen and drag your finger, or use your mouse to scroll.
+
+2.  **The Stagehand Sees It:** A special helper called **`Observer`** (from GSAP) sees you do this. It doesn't care if it was a mouse, a finger, or a scroll wheel; it just knows "the view is moving left!"
+
+3.  **The Stagehand Shouts to the Choreographer:** The `Observer` tells the **`useParallax` hook** (the main Choreographer) "They're dragging left by 10 steps!"
+
+4.  **The Choreographer Does the Math:** The Choreographer is always running a super-fast countdown (the `gsap.ticker`, which is like a heartbeat). On every beat, it does a few things:
+    *   It adds the "10 steps" to a "movement speed" variable.
+    *   It moves all the scenery (the `ParallaxLayer`s) a little bit based on this speed.
+    *   **The Parallax Trick:** Scenery in the back (layer 0) moves very slowly. Scenery in the front (layer 2) moves very quickly. This makes it look 3D!
+    *   It makes the "movement speed" a little bit smaller, so the motion smoothly slows down instead of stopping suddenly (this is inertia).
+
+5.  **The Infinite Stage Trick:** The stage is actually made of 9 identical floor tiles (a 3x3 grid). If you scroll too far to the right and the left edge comes into view, the Choreographer instantly and invisibly teleports the entire stage so you're back in the middle. You never see the edge!
+
+**The Big Secret for Speed:**
+
+-   React is used to set up the stage and actors (`Card`s) just once.
+-   GSAP (the Choreographer) handles all the fast-paced movement directly, without asking React to rebuild everything 60 times a second. This is why it's super smooth. React only steps in for big changes, like when you click a card to focus on it.
