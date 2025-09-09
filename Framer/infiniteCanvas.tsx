@@ -1,3 +1,5 @@
+//main.tsx
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -57,6 +59,7 @@ const getDynamicStyles = ({
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+  touch-action: none;
   background-color: var(--bg-color);
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   color: #333;
@@ -220,7 +223,7 @@ function createInteractionEngine(
 ): InteractionEngine {
     const observer = Observer.create({
         target,
-        type: "wheel,touch,pointer",
+        type: "wheel,pointer",
         dragMinimum: 2,
         onDrag: (self) => {
             callbacks.onDrag({ deltaX: -self.deltaX, deltaY: -self.deltaY })
@@ -537,6 +540,9 @@ function useParallax(
     const cameraZ = useRef(0)
     const targetCameraZ = useRef(0)
     const zoomVelocity = useRef(0)
+    const pinchStartCameraZ = useRef(0)
+    const pinchStartDist = useRef<number | null>(null)
+    const isPinching = useRef(false)
     const worldSize = useRef({
         width: config.baseWorldWidth,
         height: config.baseWorldHeight,
@@ -692,12 +698,11 @@ function useParallax(
                 height: container.clientHeight,
             }
 
-            const isMobile = viewportSize.current.width < 768
-            const WORLD_SCALE_FACTOR = isMobile ? 5 : 3
-
-            const newWorldWidth =
-                viewportSize.current.width * WORLD_SCALE_FACTOR
-            layoutScaleFactor = newWorldWidth / config.baseWorldWidth
+            // By setting a fixed world size and scale factor, we disable the responsive layout scaling.
+            // The canvas will still fill its container, but the arrangement and scale of cards
+            // within the parallax world will not change based on the viewport size.
+            const newWorldWidth = config.baseWorldWidth
+            layoutScaleFactor = 1 // It's baseWorldWidth / baseWorldWidth
             const newWorldHeight = config.baseWorldHeight * layoutScaleFactor
 
             worldSize.current = { width: newWorldWidth, height: newWorldHeight }
@@ -755,7 +760,11 @@ function useParallax(
 
         const engine = createInteractionEngine(container, {
             onDrag: ({ deltaX, deltaY }) => {
-                if (!enableDragPan || interactionState.current.mode !== "IDLE")
+                if (
+                    isPinching.current ||
+                    !enableDragPan ||
+                    interactionState.current.mode !== "IDLE"
+                )
                     return
                 const speed = config.scrollSpeed
                 const effectiveScale = getEffectiveScale()
@@ -812,6 +821,94 @@ function useParallax(
             },
         })
         setInteractionEngine(engine)
+
+        const handleTouchStart = (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                isPinching.current = true
+                e.preventDefault()
+                const t1 = e.touches[0]
+                const t2 = e.touches[1]
+                pinchStartDist.current = Math.hypot(
+                    t1.clientX - t2.clientX,
+                    t1.clientY - t2.clientY
+                )
+                pinchStartCameraZ.current = targetCameraZ.current
+            }
+        }
+
+        const handleTouchMove = (e: TouchEvent) => {
+            if (e.touches.length === 2 && pinchStartDist.current !== null) {
+                e.preventDefault()
+                if (!enableZoom) return
+
+                const t1 = e.touches[0]
+                const t2 = e.touches[1]
+                const currentDist = Math.hypot(
+                    t1.clientX - t2.clientX,
+                    t1.clientY - t2.clientY
+                )
+                const scaleFactor = currentDist / pinchStartDist.current
+                const pinchCenterX = (t1.clientX + t2.clientX) / 2
+                const pinchCenterY = (t1.clientY + t2.clientY) / 2
+
+                const MIN_CAMERA_Z = -4000
+                const MAX_CAMERA_Z = 750
+                const PERSPECTIVE = 1000
+
+                const startZ = pinchStartCameraZ.current
+                const startPerceivedScale = PERSPECTIVE / (PERSPECTIVE - startZ)
+                const newPerceivedScale = startPerceivedScale * scaleFactor
+                let newTargetZ = PERSPECTIVE - PERSPECTIVE / newPerceivedScale
+                newTargetZ = gsap.utils.clamp(
+                    MIN_CAMERA_Z,
+                    MAX_CAMERA_Z,
+                    newTargetZ
+                )
+
+                const oldTargetZ = targetCameraZ.current
+                let refLayerIndex = 1
+                if (focusedCardId) {
+                    const card = cards.find((c) => c.id === focusedCardId)
+                    if (card) refLayerIndex = card.layer
+                }
+                const { speed, baseZ } = config.layers[refLayerIndex]
+                const Z_old = baseZ + oldTargetZ
+                const Z_new = baseZ + newTargetZ
+                if (PERSPECTIVE - Z_old === 0 || PERSPECTIVE - Z_new === 0)
+                    return
+                const scale_ratio =
+                    (PERSPECTIVE - Z_old) / (PERSPECTIVE - Z_new)
+                const mx = pinchCenterX
+                const my = pinchCenterY
+                const cx = viewportSize.current.width / 2
+                const cy = viewportSize.current.height / 2
+                const dx = mx - cx
+                const dy = my - cy
+                const screen_shift_x = dx * (scale_ratio - 1)
+                const screen_shift_y = dy * (scale_ratio - 1)
+                const new_scale = PERSPECTIVE / (PERSPECTIVE - Z_new)
+                if (speed === 0 || new_scale === 0) return
+                const pan_impulse_x = -screen_shift_x / (speed * new_scale)
+                const pan_impulse_y = -screen_shift_y / (speed * new_scale)
+                panVelocity.current.x += pan_impulse_x
+                panVelocity.current.y += pan_impulse_y
+                targetCameraZ.current = newTargetZ
+            }
+        }
+
+        const handleTouchEnd = (e: TouchEvent) => {
+            if (e.touches.length < 2) {
+                isPinching.current = false
+                pinchStartDist.current = null
+            }
+        }
+
+        // FIX: Use AddEventListenerOptions which includes 'passive' to correctly type the event listener options.
+        const options: AddEventListenerOptions = { passive: false }
+        container.addEventListener("touchstart", handleTouchStart, options)
+        container.addEventListener("touchmove", handleTouchMove, options)
+        container.addEventListener("touchend", handleTouchEnd, options)
+        container.addEventListener("touchcancel", handleTouchEnd, options)
 
         const ticker = gsap.ticker.add(() => {
             const layerElements = layerRefs.current?.filter(
@@ -1024,6 +1121,18 @@ function useParallax(
             gsap.ticker.remove(ticker)
             window.removeEventListener("pointermove", handlePointerMove)
             window.removeEventListener("pointerup", handlePointerUp)
+            container.removeEventListener(
+                "touchstart",
+                handleTouchStart,
+                options
+            )
+            container.removeEventListener("touchmove", handleTouchMove, options)
+            container.removeEventListener("touchend", handleTouchEnd, options)
+            container.removeEventListener(
+                "touchcancel",
+                handleTouchEnd,
+                options
+            )
         }
     }, [
         cards,
