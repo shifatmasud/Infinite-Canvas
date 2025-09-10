@@ -548,6 +548,7 @@ function useParallax(
         height: config.baseWorldHeight,
     })
     const viewportSize = useRef({ width: 0, height: 0 })
+    const isInitialViewApplied = useRef(false)
 
     const draggedCardDeltas = useRef<{
         [key: string]: { x: number; y: number }
@@ -706,6 +707,37 @@ function useParallax(
             const newWorldHeight = config.baseWorldHeight * layoutScaleFactor
 
             worldSize.current = { width: newWorldWidth, height: newWorldHeight }
+
+            if (
+                !isInitialViewApplied.current &&
+                worldSize.current.width > 0 &&
+                viewportSize.current.width > 0
+            ) {
+                // Center the view on the world origin (0,0) on initial load, using layer 1 as the reference.
+                const referenceLayerSpeed = config.layers[1].speed // Mid layer
+                if (referenceLayerSpeed > 0) {
+                    panPosition.current.x =
+                        (viewportSize.current.width / 2 -
+                            worldSize.current.width / 2) /
+                        referenceLayerSpeed
+                    panPosition.current.y =
+                        (viewportSize.current.height / 2 -
+                            worldSize.current.height / 2) /
+                        referenceLayerSpeed
+                } else {
+                    // Fallback for speed = 0, though unlikely for mid layer
+                    panPosition.current.x = -worldSize.current.width / 2
+                    panPosition.current.y = -worldSize.current.height / 2
+                }
+
+                // Set an initial zoom-out to give a better overview
+                const initialZoom = -4000
+                cameraZ.current = initialZoom
+                targetCameraZ.current = initialZoom
+
+                isInitialViewApplied.current = true
+            }
+
             const allCards = cardRefs.current
             if (!allCards) return
 
@@ -780,8 +812,8 @@ function useParallax(
             },
             onZoom: ({ deltaY, event }) => {
                 if (!enableZoom) return
-                const ZOOM_SPEED_MULTIPLIER = 5
-                const ANTICIPATION_AMOUNT = 30
+                const ZOOM_SPEED_MULTIPLIER = 4 // Was 5
+                const ANTICIPATION_AMOUNT = 20 // Was 30
                 const oldTargetZ = targetCameraZ.current
                 const newTargetZ =
                     oldTargetZ +
@@ -916,10 +948,15 @@ function useParallax(
             ) as HTMLDivElement[] | undefined
             if (!layerElements || !scene) return
 
+            // --- SMOOTHING & DAMPING CONSTANTS (Tweaked for a more fluid feel) ---
+            // The LERP factor determines how quickly the camera moves to its target. Lower is smoother.
             const LERP_FACTOR_FOCUS = 0.08
-            const LERP_FACTOR_FREE = 0.1
-            const PAN_DAMPING_FACTOR = 0.9
-            const ZOOM_DAMPING_FACTOR = 0.88
+            const LERP_FACTOR_FREE = 0.07 // Was 0.1
+            // Damping factor determines friction. Higher values (closer to 1) mean less friction and longer coasting.
+            const PAN_DAMPING_FACTOR = 0.94 // Was 0.9
+            const ZOOM_DAMPING_FACTOR = 0.92 // Was 0.88
+            // --------------------------------------------------------------------
+
             const MIN_CAMERA_Z = -4000
             const MAX_CAMERA_Z = 750
 
@@ -1234,7 +1271,7 @@ type SearchBarPosition =
 // FIX: Infer SearchBarProps from the component to resolve import issues.
 type SearchBarProps = ComponentProps<typeof SearchBar>
 
-type InfiniteCanvasProps = {
+type infinitecanvasProps = {
     cards?: {
         id?: string
         layer: number
@@ -1304,7 +1341,7 @@ const getSearchBarPositionStyle = (
  * @framerSupportedLayoutWidth fill
  * @framerSupportedLayoutHeight fill
  */
-export function InfiniteCanvas({
+export function infinitecanvas({
     cards: rawCards = defaultProps.cards,
     appearance = defaultProps.appearance,
     interaction = defaultProps.interaction,
@@ -1317,7 +1354,7 @@ export function InfiniteCanvas({
     searchBarSettings: rawSearchBarSettings,
     // FIX: Accept searchBarIcon as a direct prop.
     searchBarIcon,
-}: InfiniteCanvasProps) {
+}: infinitecanvasProps) {
     const idMapRef = useRef(new WeakMap<object, string>())
     const [cardDimensions, setCardDimensions] = useState<CardDimensions>({})
     const [focusedCardId, setFocusedCardId] = useState<string | null>(null)
@@ -1518,9 +1555,9 @@ export function InfiniteCanvas({
 // ================================================================================================
 // FRAMER PROPERTIES
 // ================================================================================================
-InfiniteCanvas.defaultProps = defaultProps
+infinitecanvas.defaultProps = defaultProps
 
-addPropertyControls(InfiniteCanvas, {
+addPropertyControls(infinitecanvas, {
     showSearchBar: {
         type: ControlType.Boolean,
         title: "Search Bar",
