@@ -1595,14 +1595,14 @@ addPropertyControls(infinitecanvas, {
                     "Bottom Right",
                     "Center Middle",
                 ],
-                defaultValue: "top-left",
+                defaultValue: "bottom-center",
             },
             isExpanded: {
                 type: ControlType.Boolean,
                 title: "Expanded",
                 description:
                     "If the search bar is permanently expanded or starts as an icon.",
-                defaultValue: true,
+                defaultValue: false,
             },
             placeholderText: {
                 type: ControlType.String,

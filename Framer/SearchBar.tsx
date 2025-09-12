@@ -4,7 +4,13 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import React, { useState, useMemo, useLayoutEffect, useRef } from "react"
+import React, {
+    useState,
+    useMemo,
+    useLayoutEffect,
+    useRef,
+    useEffect,
+} from "react"
 import { addPropertyControls, ControlType } from "framer"
 import { gsap } from "gsap"
 
@@ -119,6 +125,9 @@ export default function SearchBar(props: SearchBarProps) {
     const [query, setQuery] = useState("")
     const [isInputFocused, setIsInputFocused] = useState(false)
     const [isUserExpanded, setIsUserExpanded] = useState(false)
+    const [resultsForAnimation, setResultsForAnimation] = useState<CardData[]>(
+        []
+    )
 
     const isVisible = isExpanded || isUserExpanded
 
@@ -128,6 +137,7 @@ export default function SearchBar(props: SearchBarProps) {
     const iconRef = useRef<HTMLDivElement>(null)
     const resultsRef = useRef<HTMLUListElement>(null)
     const onResultsHideComplete = useRef<(() => void) | null>(null)
+    const resultsVisible = useRef(false)
 
     const filteredResults = useMemo(() => {
         if (!query) return []
@@ -139,24 +149,27 @@ export default function SearchBar(props: SearchBarProps) {
         )
     }, [query, cards])
 
+    const showResults = isInputFocused && query.length > 0
+
+    useEffect(() => {
+        if (showResults) {
+            setResultsForAnimation(filteredResults)
+        }
+    }, [showResults, filteredResults])
+
     const handleResultClick = (cardId: string) => {
         onResultClick(cardId)
         setQuery("")
-        // This triggers the results list to start animating out
         setIsInputFocused(false)
 
-        // If the bar is collapsible, set a callback for the results animation to trigger the collapse
         if (!isExpanded) {
             onResultsHideComplete.current = () => {
                 setIsUserExpanded(false)
-                onResultsHideComplete.current = null // Clean up to prevent stale calls
+                onResultsHideComplete.current = null
             }
         }
     }
 
-    const showResults = isInputFocused && query.length > 0
-
-    // GSAP Animation for expanding/collapsing
     useLayoutEffect(() => {
         const wrapper = wrapperRef.current
         const inputWrapper = inputWrapperRef.current
@@ -164,13 +177,11 @@ export default function SearchBar(props: SearchBarProps) {
         if (!wrapper || !inputWrapper || !icon) return
 
         gsap.killTweensOf([wrapper, inputWrapper, icon])
-
         gsap.set(icon, { yPercent: -50 })
 
         const DURATION = 0.6
         const EASE = "expo.inOut"
 
-        // On initial mount, set styles without animation
         if (!isMounted.current) {
             if (isVisible) {
                 gsap.set(wrapper, { width })
@@ -186,25 +197,11 @@ export default function SearchBar(props: SearchBarProps) {
         }
 
         if (isVisible) {
-            // --- EXPAND ---
             const tl = gsap.timeline({
                 defaults: { duration: DURATION, ease: EASE },
             })
-            tl.to(
-                wrapper,
-                {
-                    width: width,
-                },
-                0
-            )
-                .to(
-                    icon,
-                    {
-                        left: `${padding}px`,
-                        xPercent: 0,
-                    },
-                    0
-                )
+            tl.to(wrapper, { width: width }, 0)
+                .to(icon, { left: `${padding}px`, xPercent: 0 }, 0)
                 .to(
                     inputWrapper,
                     {
@@ -215,30 +212,14 @@ export default function SearchBar(props: SearchBarProps) {
                     DURATION * 0.2
                 )
         } else {
-            // --- COLLAPSE ---
             const tl = gsap.timeline({
                 defaults: { duration: DURATION, ease: EASE },
             })
-
             const fadeDuration = DURATION * 0.5
             const expandFadeDelay = DURATION * 0.2
             const collapseFadeDelay = DURATION - fadeDuration - expandFadeDelay
-
-            tl.to(
-                wrapper,
-                {
-                    width: height,
-                },
-                0
-            )
-                .to(
-                    icon,
-                    {
-                        left: "50%",
-                        xPercent: -50,
-                    },
-                    0
-                )
+            tl.to(wrapper, { width: height }, 0)
+                .to(icon, { left: "50%", xPercent: -50 }, 0)
                 .to(
                     inputWrapper,
                     {
@@ -251,7 +232,6 @@ export default function SearchBar(props: SearchBarProps) {
         }
     }, [isVisible, width, height, padding])
 
-    // GSAP Animation for results dropdown
     useLayoutEffect(() => {
         const resultsContainer = resultsRef.current
         if (!resultsContainer) return
@@ -261,64 +241,87 @@ export default function SearchBar(props: SearchBarProps) {
         gsap.killTweensOf(resultsItems)
 
         const isBottom = resultsPosition === "bottom"
-        // A small vertical shift for a soft "lift" or "drop" effect
-        const yOffset = isBottom ? -12 : 12
+        const yOffset = isBottom ? -20 : 20
+        const itemYOffsetIn = -15
+        const itemYOffsetOut = -15
+        const hasResults = resultsForAnimation.length > 0
 
-        if (showResults) {
+        if (showResults && hasResults && !resultsVisible.current) {
+            resultsVisible.current = true
             resultsContainer.style.visibility = "visible"
-            // Soft fade and slide-in for the container
-            gsap.fromTo(
+            const tlIn = gsap.timeline()
+            tlIn.fromTo(
                 resultsContainer,
                 {
                     opacity: 0,
                     y: yOffset,
+                    scale: 0.95,
+                    transformOrigin: isBottom ? "top center" : "bottom center",
                 },
                 {
                     opacity: 1,
                     y: 0,
-                    duration: 0.5,
+                    scale: 1,
+                    duration: 0.6,
                     ease: "expo.out",
-                }
+                },
+                0
             )
-
-            // Staggered fade-in for list items
             if (resultsItems.length) {
-                gsap.fromTo(
+                tlIn.fromTo(
                     resultsItems,
-                    { opacity: 0, y: 15 },
+                    { opacity: 0, y: itemYOffsetIn },
                     {
                         opacity: 1,
                         y: 0,
-                        duration: 0.5,
+                        duration: 0.6,
                         ease: "expo.out",
                         stagger: 0.07,
-                        delay: 0.1,
-                    }
+                    },
+                    0.1
                 )
             }
-        } else {
-            // Soft fade and slide-out for the container
-            gsap.to(resultsContainer, {
-                opacity: 0,
-                y: yOffset,
-                duration: 0.3,
-                ease: "power2.in",
+        } else if (!showResults && resultsVisible.current) {
+            resultsVisible.current = false
+            const tlOut = gsap.timeline({
                 onComplete: () => {
                     if (resultsRef.current) {
                         resultsRef.current.style.visibility = "hidden"
-                        // Reset transform for the next time it opens
-                        gsap.set(resultsRef.current, { y: 0 })
                     }
-                    // If a collapse callback is pending, execute it
+                    setResultsForAnimation([])
                     if (onResultsHideComplete.current) {
                         onResultsHideComplete.current()
                     }
                 },
             })
-        }
-    }, [showResults, filteredResults, resultsPosition])
 
-    // Styles derived from props
+            if (resultsItems.length) {
+                tlOut.to(
+                    resultsItems,
+                    {
+                        opacity: 0,
+                        y: itemYOffsetOut,
+                        duration: 0.25,
+                        ease: "power2.in",
+                        stagger: { each: 0.05, from: "start" },
+                    },
+                    0
+                )
+            }
+            tlOut.to(
+                resultsContainer,
+                {
+                    opacity: 0,
+                    y: yOffset,
+                    scale: 0.95,
+                    duration: 0.3,
+                    ease: "power3.in",
+                },
+                resultsItems.length > 0 ? 0.15 : 0
+            )
+        }
+    }, [showResults, resultsForAnimation, resultsPosition])
+
     const searchContainerStyle: React.CSSProperties = {
         position: "relative",
         zIndex: 1000,
@@ -425,9 +428,7 @@ export default function SearchBar(props: SearchBarProps) {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         onFocus={() => setIsInputFocused(true)}
-                        onBlur={() =>
-                            setTimeout(() => setIsInputFocused(false), 200)
-                        }
+                        onBlur={() => setIsInputFocused(false)}
                         placeholder={placeholderText}
                         style={searchInputStyle}
                         aria-label="Search cards by title or meta data"
@@ -441,8 +442,8 @@ export default function SearchBar(props: SearchBarProps) {
                 style={resultsContainerStyle}
                 role="listbox"
             >
-                {filteredResults.length > 0
-                    ? filteredResults.map((card) => (
+                {resultsForAnimation.length > 0
+                    ? resultsForAnimation.map((card) => (
                           <li
                               key={card.id}
                               className="result-item"
@@ -480,7 +481,7 @@ export default function SearchBar(props: SearchBarProps) {
                               </small>
                           </li>
                       ))
-                    : query.length > 0 && (
+                    : showResults && (
                           <li
                               className="result-item"
                               style={{

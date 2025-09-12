@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import ReactDOM from 'react-dom/client';
-import { InfiniteCanvas } from './Framer/infiniteCanvas';
+import { infinitecanvas as InfiniteCanvas } from './Framer/infiniteCanvas';
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 
